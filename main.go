@@ -65,6 +65,7 @@ func editorProcessKeypress() {
 	case CTRL_KEY('q'):
 		fmt.Print("\x1b[2J")
 		fmt.Print("\x1b[H")
+		disableRawMode(E.termios)
 		os.Exit(0)
 	}
 }
