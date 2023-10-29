@@ -11,6 +11,8 @@ import (
 var version = "0.0.1"
 
 type editorConfig struct {
+	cx          int
+	cy          int
 	screenRows  int
 	screenCols  int
 	origTermios *term.State
@@ -58,6 +60,13 @@ func CTRL_KEY(k byte) byte {
 	return k & 0x1f
 }
 
+const (
+	ARROW_UP    = 'w'
+	ARROW_DOWN  = 's'
+	ARROW_RIGHT = 'd'
+	ARROW_LEFT  = 'a'
+)
+
 // Read a keypress and return the byte representation of the key
 func editorReadKey() (byte, error) {
 	var c [1]byte
@@ -65,7 +74,49 @@ func editorReadKey() (byte, error) {
 	if err != nil {
 		return 0, err
 	}
+	if c[0] == '\x1b' {
+		seq := make([]byte, 2)
+		_, err := os.Stdin.Read(seq)
+		if err != nil || seq[0] != '[' {
+			return '\x1b', err
+		}
+		switch seq[1] {
+		case 'A':
+			return ARROW_UP, nil
+		case 'B':
+			return ARROW_DOWN, nil
+		case 'C':
+			return ARROW_RIGHT, nil
+		case 'D':
+			return ARROW_LEFT, nil
+		}
+		return '\x1b', nil
+	}
+
 	return c[0], nil
+}
+
+func editorMoveCursor(key byte) {
+	switch key {
+	case ARROW_LEFT:
+		E.cx--
+	case ARROW_RIGHT:
+		E.cx++
+	case ARROW_UP:
+		E.cy--
+	case ARROW_DOWN:
+		E.cy++
+	}
+	if E.cy < 0 {
+		E.cy = 0
+	} else if E.cy >= E.screenRows {
+		E.cy = E.screenRows - 1
+	}
+	if E.cx < 0 {
+		E.cx = 0
+	} else if E.cx >= E.screenCols {
+		E.cx = E.screenCols - 1
+	}
 }
 
 // Logic for processing keypresses
@@ -83,10 +134,13 @@ func editorProcessKeypress() {
 		fmt.Print("\x1b[H")
 		disableRawMode(E.origTermios)
 		os.Exit(0)
+	case ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT:
+		editorMoveCursor(c)
 	}
 }
 
 // Draw tilde characters to fill the screen similar to vim
+// Welcome message is displayed in the middle of the screen using padding
 // \x1b[K is the escape sequence to clear the line
 // \r\n is the escape sequence to move to the next line
 func editorDrawRows() {
@@ -117,8 +171,9 @@ func editorDrawRows() {
 
 // \x1b is the escape character which is 27 in decimal
 // [?25l is the escape sequence to hide the cursor
-// [2J is the escape sequence to clear the screen
 // [H is the escape sequence to position the cursor at the top left of the screen
+// [%d;%dH is the escape sequence to position the cursor at a specific row and column
+// [?25h is the escape sequence to show the cursor]
 // This is based on the VT100 terminal escape sequences
 // Visit https://vt100.net/docs/vt100-ug/chapter3.html#ED for more info
 func editorRefreshScreen() {
@@ -127,7 +182,17 @@ func editorRefreshScreen() {
 
 	editorDrawRows()
 
-	abAppend(&ABUF_INIT, []byte("\x1b[H"))
+	// Ensure cursor position is within the screen boundaries
+	if E.cy >= E.screenRows {
+		E.cy = E.screenRows - 1
+	}
+	if E.cx >= E.screenCols {
+		E.cx = E.screenCols - 1
+	}
+
+	buf := fmt.Sprintf("\x1b[%d;%dH", E.cy+1, E.cx+1)
+	abAppend(&ABUF_INIT, []byte(buf))
+
 	abAppend(&ABUF_INIT, []byte("\x1b[?25h"))
 
 	fmt.Print(string(ABUF_INIT.b))
@@ -139,8 +204,10 @@ func getWindowSize() (int, int, error) {
 	return term.GetSize(int(os.Stdin.Fd()))
 }
 
-// Initialize the editor by getting the window size
+// Initialize the editor by getting the window size and setting the cursor position to 0,0
 func initEditor() error {
+	E.cx = 0
+	E.cy = 0
 	var err error
 	E.screenCols, E.screenRows, err = getWindowSize()
 	if err != nil {
