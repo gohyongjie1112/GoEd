@@ -18,8 +18,17 @@ To install GoEd, follow these steps:
 
 3. Change to the project directory and run either the build or run command:
 
+Build the project:
+
 `$ go build`
+
+Run the executable:
+
 `$ ./GoEd`
+
+or
+
+Run the Go program:
 
 `$ go run main.go`
 
