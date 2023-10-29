@@ -8,26 +8,39 @@ import (
 )
 
 type editorConfig struct {
-	screenRows int
-	screenCols int
-	termios    *term.State
+	screenRows  int
+	screenCols  int
+	origTermios *term.State
 }
 
 var E editorConfig
 
+type abuf struct {
+	b   []byte
+	len int
+}
+
+var ABUF_INIT = abuf{b: nil, len: 0}
+
+// Append a string to the buffer
+func abAppend(ab *abuf, s []byte) {
+	ab.b = append(ab.b, s...)
+	ab.len += len(s)
+}
+
 // Sets the terminal to raw mode and returns the previous state of the terminal
 // This allows us to restore the terminal to its previous state when the program exits
 // Visit term package docs for more info: https://pkg.go.dev/golang.org/x/term
-func enableRawMode() (*term.State, error) {
+func enableRawMode() error {
 	fd := int(os.Stdin.Fd())
 
 	oldState, err := term.MakeRaw(fd)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	E.termios = oldState
-	return oldState, nil
+	E.origTermios = oldState
+	return nil
 }
 
 // Use this to restore the terminal to its previous state when the program exits
@@ -65,30 +78,41 @@ func editorProcessKeypress() {
 	case CTRL_KEY('q'):
 		fmt.Print("\x1b[2J")
 		fmt.Print("\x1b[H")
-		disableRawMode(E.termios)
+		disableRawMode(E.origTermios)
 		os.Exit(0)
 	}
 }
 
 // Draw tilde characters to fill the screen similar to vim
+// \x1b[K is the escape sequence to clear the line
+// \r\n is the escape sequence to move to the next line
 func editorDrawRows() {
 	for i := 0; i < E.screenRows; i++ {
-		fmt.Println("~")
+		abAppend(&ABUF_INIT, []byte("~"))
+		abAppend(&ABUF_INIT, []byte("\x1b[K"))
+		if i < E.screenRows-1 {
+			abAppend(&ABUF_INIT, []byte("\r\n"))
+		}
 	}
 }
 
 // \x1b is the escape character which is 27 in decimal
+// [?25l is the escape sequence to hide the cursor
 // [2J is the escape sequence to clear the screen
 // [H is the escape sequence to position the cursor at the top left of the screen
 // This is based on the VT100 terminal escape sequences
 // Visit https://vt100.net/docs/vt100-ug/chapter3.html#ED for more info
 func editorRefreshScreen() {
-	fmt.Print("\x1b[2J")
-	fmt.Print("\x1b[H")
+	abAppend(&ABUF_INIT, []byte("\x1b[?25l"))
+	abAppend(&ABUF_INIT, []byte("\x1b[2J"))
+	abAppend(&ABUF_INIT, []byte("\x1b[H"))
 
 	editorDrawRows()
 
-	fmt.Print("\x1b[H")
+	abAppend(&ABUF_INIT, []byte("\x1b[H"))
+	abAppend(&ABUF_INIT, []byte("\x1b[?25h"))
+
+	fmt.Print(string(ABUF_INIT.b))
 }
 
 // Get the size of the terminal window using the term package
@@ -97,10 +121,10 @@ func getWindowSize() (int, int, error) {
 	return term.GetSize(int(os.Stdin.Fd()))
 }
 
+// Initialize the editor by getting the window size
 func initEditor() error {
 	var err error
-	E.screenRows, E.screenCols, err = getWindowSize()
-	fmt.Print(E.screenRows, E.screenCols)
+	E.screenCols, E.screenRows, err = getWindowSize()
 	if err != nil {
 		return fmt.Errorf("error getting window size: %v", err)
 	}
@@ -108,7 +132,7 @@ func initEditor() error {
 }
 
 func main() {
-	oldState, err := enableRawMode()
+	err := enableRawMode()
 	if err != nil {
 		fmt.Println("Error setting raw mode:", err)
 		return
@@ -116,7 +140,7 @@ func main() {
 
 	initEditor()
 
-	defer disableRawMode(oldState)
+	defer disableRawMode(E.origTermios)
 
 	for {
 		editorRefreshScreen()
