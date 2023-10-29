@@ -2,10 +2,13 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"golang.org/x/term"
 )
+
+var version = "0.0.1"
 
 type editorConfig struct {
 	screenRows  int
@@ -88,7 +91,23 @@ func editorProcessKeypress() {
 // \r\n is the escape sequence to move to the next line
 func editorDrawRows() {
 	for i := 0; i < E.screenRows; i++ {
-		abAppend(&ABUF_INIT, []byte("~"))
+		if i == E.screenRows/3 {
+			welcome := fmt.Sprintf("GoEd -- version %s", version)
+			if len(welcome) > E.screenCols {
+				welcome = welcome[:E.screenCols]
+			}
+			padding := (E.screenCols - len(welcome)) / 2
+			if padding > 0 {
+				abAppend(&ABUF_INIT, []byte("~"))
+				padding--
+			}
+			for ; padding > 0; padding-- {
+				abAppend(&ABUF_INIT, []byte(" "))
+			}
+			abAppend(&ABUF_INIT, []byte(welcome))
+		} else {
+			abAppend(&ABUF_INIT, []byte("~"))
+		}
 		abAppend(&ABUF_INIT, []byte("\x1b[K"))
 		if i < E.screenRows-1 {
 			abAppend(&ABUF_INIT, []byte("\r\n"))
@@ -104,7 +123,6 @@ func editorDrawRows() {
 // Visit https://vt100.net/docs/vt100-ug/chapter3.html#ED for more info
 func editorRefreshScreen() {
 	abAppend(&ABUF_INIT, []byte("\x1b[?25l"))
-	abAppend(&ABUF_INIT, []byte("\x1b[2J"))
 	abAppend(&ABUF_INIT, []byte("\x1b[H"))
 
 	editorDrawRows()
@@ -134,7 +152,7 @@ func initEditor() error {
 func main() {
 	err := enableRawMode()
 	if err != nil {
-		fmt.Println("Error setting raw mode:", err)
+		log.Fatalf("Error setting raw mode: %v", err)
 		return
 	}
 
