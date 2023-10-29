@@ -14,20 +14,14 @@ To install GoEd, follow these steps:
 1. Ensure that you have Go installed.
 2. Clone the repository to your local machine src directory:
 
-```bash
-$ git clone https://github.com/gohyongjie1112/GoEd.git
-```
+`$ git clone https://github.com/gohyongjie1112/GoEd.git`
 
 3. Change to the project directory and run either the build or run command:
 
-```bash
-$ go build
-$ ./GoEd
-```
+`$ go build`
+`$ ./GoEd`
 
-```bash
-$ go run main.go
-```
+`$ go run main.go`
 
 ## License
 
