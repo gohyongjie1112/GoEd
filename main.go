@@ -65,8 +65,11 @@ const (
 	ARROW_DOWN  = 's'
 	ARROW_RIGHT = 'd'
 	ARROW_LEFT  = 'a'
+	DEL_KEY     = '\x7f'
 	PAGE_UP     = 'k'
 	PAGE_DOWN   = 'j'
+	HOME_KEY    = 'h'
+	END_KEY     = 'l'
 )
 
 // Read a keypress and return the byte representation of the key
@@ -82,23 +85,52 @@ func editorReadKey() (byte, error) {
 		if err != nil || seq[0] != '[' {
 			return '\x1b', err
 		}
-		if seq[0] == '[' && seq[1] >= '0' && seq[1] <= '9' && seq[2] == '~' {
-			switch seq[1] {
-			case '5':
-				return PAGE_UP, nil
-			case '6':
-				return PAGE_DOWN, nil
+		if seq[0] == '[' {
+			if seq[1] >= '0' && seq[1] <= '9' {
+				_, err := os.Stdin.Read(seq[2:])
+				if err != nil {
+					return '\x1b', err
+				}
+				if seq[2] == '~' {
+					switch seq[1] {
+					case '1':
+						return HOME_KEY, nil
+					case '3':
+						return DEL_KEY, nil
+					case '4':
+						return END_KEY, nil
+					case '5':
+						return PAGE_UP, nil
+					case '6':
+						return PAGE_DOWN, nil
+					case '7':
+						return HOME_KEY, nil
+					case '8':
+						return END_KEY, nil
+					}
+				}
+			} else {
+				switch seq[1] {
+				case 'A':
+					return ARROW_UP, nil
+				case 'B':
+					return ARROW_DOWN, nil
+				case 'C':
+					return ARROW_RIGHT, nil
+				case 'D':
+					return ARROW_LEFT, nil
+				case 'H':
+					return HOME_KEY, nil
+				case 'F':
+					return END_KEY, nil
+				}
 			}
-		} else {
+		} else if seq[0] == 'O' {
 			switch seq[1] {
-			case 'A':
-				return ARROW_UP, nil
-			case 'B':
-				return ARROW_DOWN, nil
-			case 'C':
-				return ARROW_RIGHT, nil
-			case 'D':
-				return ARROW_LEFT, nil
+			case 'H':
+				return HOME_KEY, nil
+			case 'F':
+				return END_KEY, nil
 			}
 		}
 		return '\x1b', nil
@@ -143,6 +175,10 @@ func editorProcessKeypress() {
 		fmt.Print("\x1b[H")
 		disableRawMode(E.origTermios)
 		os.Exit(0)
+	case HOME_KEY:
+		E.cx = 0
+	case END_KEY:
+		E.cx = E.screenCols - 1
 	case PAGE_UP, PAGE_DOWN:
 		times := E.screenRows
 		for times > 0 {
