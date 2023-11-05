@@ -1,4 +1,4 @@
-module github.com/gohyongjie1112/GoEd
+module github.com/poryduckZ/GoEd
 
 go 1.20
 
